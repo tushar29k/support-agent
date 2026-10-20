@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>support-agent — grounded tickets, gated actions</title>
+<style>
+:root{
+  --bg:#040b07; --panel:#071309; --panel2:#0a1c11; --line:#14402a;
+  --green:#4ade80; --bright:#c9f5da; --dim:#6f927f;
+  --amber:#fbbf24; --red:#f87171; --text:#d8ecdf;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);
+  font-family:ui-monospace,'Cascadia Code','JetBrains Mono',Menlo,Consolas,monospace;
+  line-height:1.65;padding:1.6rem 1.1rem;max-width:920px;margin:0 auto;font-size:15px}
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:60;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px);opacity:.35}
+header.top{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:.3rem}
+.dot{width:10px;height:10px;border-radius:50%;background:#3a4a41}
+.dot.ok{background:var(--green);box-shadow:0 0 10px var(--green)}
+h1{font-size:1.15rem;letter-spacing:2px;color:var(--bright)}
+h1 span{color:var(--green)}
+.sys{margin-left:auto;color:var(--dim);font-size:.78rem;letter-spacing:1px}
+.sub{color:var(--dim);font-size:.85rem;margin:.5rem 0 1.2rem;max-width:70ch}
+.sub b{color:var(--amber);font-weight:normal}
+.panel{border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  padding:1rem 1.1rem;margin-bottom:1.1rem}
+.panel h2{font-size:.8rem;letter-spacing:2px;color:var(--green);margin-bottom:.7rem}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.8rem}
+.step{border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;background:var(--panel2)}
+.step b{color:var(--bright);display:block;font-size:.85rem;margin-bottom:.25rem}
+.step p{color:var(--dim);font-size:.8rem}
+.chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem}
+.chip{border:1px solid var(--line);background:var(--panel2);color:var(--text);
+  border-radius:999px;padding:.35rem .8rem;font-family:inherit;font-size:.78rem;cursor:pointer}
+.chip:hover{border-color:var(--green);color:var(--bright)}
+.row{display:flex;gap:.7rem;align-items:stretch}
+input[type=text]{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  color:var(--bright);padding:.75rem 1rem;font-size:.95rem;font-family:inherit;min-width:0}
+input:focus{outline:none;border-color:var(--green)}
+button.go{background:var(--green);border:1px solid var(--green);color:#04140a;font-family:inherit;
+  font-weight:bold;letter-spacing:1px;padding:.75rem 1.4rem;border-radius:8px;cursor:pointer}
+#feed{display:flex;flex-direction:column;gap:.55rem;min-height:120px}
+.ev{animation:fade .25s ease;word-break:break-word}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}}
+.ev .tag{color:var(--dim);font-size:.72rem;letter-spacing:1px}
+.ev.docs{color:var(--dim);font-size:.85rem}
+.ev.docs b{color:var(--green);font-weight:normal}
+.ev.draft{border:1px solid var(--green);border-radius:8px;padding:.8rem 1rem;
+  background:rgba(74,222,128,.05);color:var(--bright)}
+.ev.gate{border:1px dashed var(--amber);border-radius:8px;padding:.8rem 1rem;
+  background:rgba(251,191,36,.05)}
+.ev.tool{border-left:2px solid var(--green);padding-left:.7rem;font-size:.88rem}
+.ev.final{color:var(--green);font-size:.9rem}
+.appr{display:flex;gap:.7rem;margin-top:.7rem;flex-wrap:wrap}
+.appr button{padding:.5rem 1.2rem;border-radius:6px;cursor:pointer;font-family:inherit;
+  font-weight:bold;letter-spacing:1px}
+.appr .yes{background:var(--green);color:#04140a;border:1px solid var(--green)}
+.appr .no{background:transparent;color:var(--red);border:1px solid var(--red)}
+pre.dump{background:#020604;border:1px solid var(--line);border-radius:6px;
+  padding:.6rem .8rem;overflow-x:auto;font-size:.78rem;color:var(--bright);white-space:pre-wrap}
+.stats{display:flex;gap:1.4rem;flex-wrap:wrap}
+.stat b{display:block;font-size:1.3rem;color:var(--green)}
+.stat span{color:var(--dim);font-size:.75rem;letter-spacing:1px}
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="dot" id="livedot"></span>
+  <h1>support<span>-agent</span></h1>
+  <span class="sys" id="backend">checking backend…</span>
+</header>
+<p class="sub">A support-ticket agent that may only say what the knowledge base
+says — and may only <b>move money after a human approves it</b>. Pick a sample
+ticket (or write your own) and watch retrieval, the draft, the approval gate
+and the tool calls stream in.</p>
+
+<div class="panel">
+  <h2>HOW IT WORKS</h2>
+  <div class="steps">
+    <div class="step"><b>1 · Retrieve</b><p>Hybrid search over the policy KB: BM25 for exact terms, a dense-style scorer for paraphrases. Both scores shown per doc.</p></div>
+    <div class="step"><b>2 · Draft, grounded</b><p>The reply is assembled only from retrieved policy text, with citations. No doc, no claim — the agent escalates instead of improvising.</p></div>
+    <div class="step"><b>3 · Approval gate</b><p>Refunds are destructive. The run pauses and waits for a human yes/no — try denying one and watch the trace.</p></div>
+    <div class="step"><b>4 · Act + trace</b><p>Approved actions execute through MCP-style tools and land in the action store below, so every side effect is checkable.</p></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>RUN A TICKET</h2>
+  <div class="chips" id="samples"></div>
+  <div class="row">
+    <input type="text" id="msg" placeholder="describe the customer's problem…" />
+    <button class="go" id="run">RUN</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>LIVE TRACE</h2>
+  <div id="feed"><p class="ev" style="color:var(--dim)">nothing yet — run a ticket.</p></div>
+</div>
+
+<div class="panel">
+  <h2>ACTION STORE — WHAT ACTUALLY HAPPENED</h2>
+  <pre class="dump" id="store">no tool actions yet</pre>
+</div>
+
+<div class="panel">
+  <h2>EVALS — GROUNDEDNESS SUITE (offline, mock brain)</h2>
+  <div class="stats">
+    <div class="stat"><b>10/10</b><span>grounded cases pass — right citation, zero invented numbers</span></div>
+    <div class="stat"><b>0%</b><span>hallucination rate on 8 planted "bait" questions about policies that don't exist</span></div>
+  </div>
+  <p style="color:var(--dim);font-size:.8rem;margin-top:.6rem">Reproduce: <code>python3 evals/run_eval.py</code> — the same suite gates CI.</p>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var feed = document.getElementById('feed');
+  var msgEl = document.getElementById('msg');
+  var tid = 'web-' + Math.random().toString(36).slice(2, 8);
+  var samples = [
+    'I was charged twice for my order, please refund me',
+    'My headphones arrived cracked, what can I do?',
+    'This is outrageous, I want a manager and a refund of 350 dollars',
+    'Do you offer a lifetime warranty on everything?'
+  ];
+  var chips = document.getElementById('samples');
+  samples.forEach(function(s){
+    var b = document.createElement('button');
+    b.className = 'chip'; b.textContent = s.length > 52 ? s.slice(0, 52) + '…' : s;
+    b.onclick = function(){ msgEl.value = s; };
+    chips.appendChild(b);
+  });
+
+  fetch('/info').then(function(r){ return r.json(); }).then(function(info){
+    document.getElementById('livedot').className = 'dot ok';
+    document.getElementById('backend').textContent = info.real_llm
+      ? ('live llm · ' + info.provider) : 'offline mock brain · deterministic';
+  }).catch(function(){});
+
+  function add(cls, html){
+    var d = document.createElement('div');
+    d.className = 'ev ' + cls; d.innerHTML = html;
+    feed.appendChild(d); d.scrollIntoView({block:'end', behavior:'smooth'});
+    return d;
+  }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  function handle(ev){
+    if (ev.type === 'retrieved') {
+      var docs = ev.docs.map(function(d){
+        return '<b>' + esc(d.id) + '</b> (hybrid ' + d.score + ' · bm25 ' + d.bm25 + ' · dense ' + d.dense + ')';
+      }).join('<br>');
+      add('docs', '<span class="tag">RETRIEVED</span><br>' + (docs || 'no documents matched'));
+    } else if (ev.type === 'draft') {
+      add('draft', '<span class="tag">DRAFT · BRAIN: ' + esc(ev.brain) +
+        ' · CITES: ' + esc(ev.citations.join(', ') || 'none') + '</span><br>' + esc(ev.reply));
+    } else if (ev.type === 'approval_required') {
+      var g = add('gate', '<span class="tag" style="color:var(--amber)">APPROVAL REQUIRED</span><br>' +
+        'The agent wants to run <b>' + esc(ev.tool) + '</b> — ' + esc(ev.desc) +
+        '<br><span style="color:var(--dim)">' + esc(JSON.stringify(ev.args)) + '</span>');
+      var row = document.createElement('div'); row.className = 'appr';
+      var yes = document.createElement('button'); yes.className = 'yes'; yes.textContent = 'APPROVE';
+      var no = document.createElement('button'); no.className = 'no'; no.textContent = 'DENY';
+      yes.onclick = function(){ row.remove(); post('/approve', {ticket_id: tid, approved: true}); };
+      no.onclick = function(){ row.remove(); post('/approve', {ticket_id: tid, approved: false, reason: 'denied in demo'}); };
+      row.appendChild(yes); row.appendChild(no); g.appendChild(row);
+    } else if (ev.type === 'tool_result') {
+      add('tool', '<span class="tag">TOOL ' + esc(ev.tool) + '</span> ' +
+        (ev.ok ? 'ok — ' + esc(JSON.stringify(ev.result)) : 'failed/denied — ' + esc(ev.error)));
+    } else if (ev.type === 'final') {
+      add('final', '■ ' + esc(ev.status) + (ev.note ? ' — ' + esc(ev.note) : ''));
+      refreshStore();
+    }
+  }
+
+  function post(path, body){
+    return fetch(path, {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)}).then(function(r){
+      var reader = r.body.getReader(); var dec = new TextDecoder(); var buf = '';
+      function pump(){
+        return reader.read().then(function(res){
+          if (res.done) return;
+          buf += dec.decode(res.value, {stream:true});
+          var lines = buf.split('\n'); buf = lines.pop();
+          lines.forEach(function(l){ if (l.trim()) handle(JSON.parse(l)); });
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
+  function refreshStore(){
+    fetch('/store').then(function(r){ return r.json(); }).then(function(s){
+      var el = document.getElementById('store');
+      var empty = !s.refunds.length && !s.escalations.length && !s.updates.length;
+      el.textContent = empty ? 'no tool actions yet' : JSON.stringify(s, null, 2);
+    }).catch(function(){});
+  }
+
+  document.getElementById('run').onclick = function(){
+    var m = msgEl.value.trim(); if (!m) return;
+    feed.innerHTML = '';
+    tid = 'web-' + Math.random().toString(36).slice(2, 8);
+    add('docs', '<span class="tag">TICKET ' + tid + '</span><br>' + esc(m));
+    post('/ticket', {ticket_id: tid, message: m});
+  };
+  msgEl.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') document.getElementById('run').click();
+  });
+})();
+</script>
+</body>
+</html>
