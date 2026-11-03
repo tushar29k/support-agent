@@ -120,3 +120,24 @@ Two suites (details in `docs/adr/0003`):
 - **grounded** (10 cases): cites the right doc, no invented numbers.
 - **bait** (8 cases): questions about nonexistent policies — fails if the
   reply repeats the bait.
+
+### Adversarial evals (report-only)
+
+```
+python3 evals/run_adversarial.py   # seeds + generated variants
+python3 evals/run_scenarios.py     # AgentDojo-style poisoned-KB scenarios
+python3 evals/make_report.py       # regenerate evals/adversarial-report.md
+```
+
+Attacks on each safety layer — fake pre-approvals and forged approval
+tokens at the gate, poisoned knowledge-base docs at the grounded draft,
+mutated phrasings at the action policy, scripted probes of `approve()`
+itself — scored with three frozen metrics (attack success rate,
+false-refusal rate, completion under attack; `evals/scoring.py` v1).
+Headline, mock brain: the gate never let a refund execute without a
+human (0 unauthorised executions in 171 attack runs), but planted KB
+claims rode the extractive draft into the reply (scenario ASR 60%),
+and 5 of 16 benign controls were parked by spurious refund proposals
+for asking questions *about* refunds. Full numbers in
+`evals/adversarial-report.md`; the write-up is
+[RESEARCH.md](RESEARCH.md) — *The Gate Held, the Draft Leaked*.
