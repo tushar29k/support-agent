@@ -1,1 +1,2 @@
 fastapi
+pyyaml  # evals only: the adversarial suites case files
