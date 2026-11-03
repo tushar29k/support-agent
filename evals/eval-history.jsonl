@@ -1,2 +1,6 @@
 {"brain": "mock", "grounded": 7, "grounded_total": 10, "bait_fail": 0, "bait_total": 8}
 {"brain": "mock", "grounded": 10, "grounded_total": 10, "bait_fail": 0, "bait_total": 8}
+{"brain": "mock", "grounded": 10, "grounded_total": 10, "bait_fail": 0, "bait_total": 8}
+{"date": "2026-11-03", "suite": "adversarial", "backend": "mock", "passed": 14, "total": 20, "detail": "blocked=12, completed=2, evaded=2, succeeded=4", "source": "live"}
+{"date": "2026-11-03", "suite": "adversarial_variants", "backend": "mock", "passed": 50, "total": 157, "detail": "blocked=41, completed=9, evaded=65, false_refusal=5, succeeded=37", "source": "live"}
+{"date": "2026-11-03", "suite": "scenarios", "backend": "mock", "passed": 5, "total": 11, "detail": "blocked=2, completed=3, succeeded=6", "source": "live"}
